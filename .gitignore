@@ -1,0 +1,16 @@
+﻿# local artifacts / generated
+.mcpdiet.json
+.mcpdiet/
+
+# deps
+node_modules/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
