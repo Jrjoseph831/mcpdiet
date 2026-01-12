@@ -1,6 +1,6 @@
 {
   "name": "@lowloadlabs/mcpdiet-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local-first guardrails for MCP/agent runs (early preview).",
   "license": "MIT",
   "private": false,
