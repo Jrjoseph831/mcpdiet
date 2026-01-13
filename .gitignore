@@ -5,6 +5,10 @@
 # npm pack artifacts
 *.tgz
 
+# temp/test artifacts
+.mcpdiet/
+.mcpdiet.json
+
 # deps
 node_modules/
 
