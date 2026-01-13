@@ -41,4 +41,10 @@
     "gateway",
     "lowloadlabs"
   ]
+  ,
+  "scripts": {
+    "test": "node --test",
+    "prepublishOnly": "npm test",
+    "pack:check": "npm pack --dry-run"
+  }
 }
