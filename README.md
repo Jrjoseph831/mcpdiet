@@ -53,3 +53,4 @@ mcpdiet status
 ## License
 
 MIT
+\n(ruleset verification)
