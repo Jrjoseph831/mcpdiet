@@ -1,17 +1,21 @@
 # RELEASE
 
-Requirements
-- Bump the version in `package.json` before publishing
+## Checklist
+- Bump the version in `package.json`
+- Run `npm test`
+- Run `npm run pack:check`
+- Review `git status` and `git diff`
+- Tag the release
+- Publish to npm
 
-Publish steps
-```
-npm logout
-npm login
-npm whoami
+## Commands
+```bash
+git tag vX.Y.Z
+git push --tags
 npm publish --access public
 ```
 
-Common errors
+## Common errors
 - "token expired": run `npm logout` then `npm login`
-- "not authorized": you’re not publishing as an org member with rights
+- "not authorized": verify org rights for publish
 - "2FA required": enable npm 2FA for publish

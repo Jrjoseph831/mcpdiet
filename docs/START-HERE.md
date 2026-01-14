@@ -3,24 +3,25 @@
 Prereqs
 - Node 18+
 
-Setup
+Install (global)
+```bash
+npm i -g @lowloadlabs/mcpdiet-cli
 ```
+
+Local dev (optional)
+```bash
 npm install
-```
-
-Local run
-```
-node bin/mcpdiet.js --help
-```
-
-Make the CLI available globally for dev
-```
 npm link
 ```
 
-Quick smoke test
-```
+Quickstart (PowerShell)
+```powershell
 mcpdiet init
 mcpdiet doctor
-type .mcpdiet.json
+mcpdiet run -- node -e "console.log('hello')"
+mcpdiet status
 ```
+
+What gets created
+- `.mcpdiet.json`
+- `.mcpdiet/` with `runs/` and `policies/`
