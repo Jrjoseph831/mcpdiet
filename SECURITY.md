@@ -10,7 +10,7 @@ mcpdiet is local-first and offline by default:
 - Child processes are started with `spawn` and `shell: false`.
 - Run logs are stored locally in `.mcpdiet/runs/`.
 - Policy files are stored locally in `.mcpdiet/policies/`.
-- Redaction policy is applied to run logs and run metadata.
+- Redaction policy is applied to run logs, run metadata, and console output.
 
 Note: mcpdiet does not sandbox or constrain the commands you run. It records runs and artifacts.
 

@@ -7,7 +7,7 @@ _Ship lean agents._
 Local-first CLI guardrails around MCP/agent runs; reduce context bloat and leave an audit trail for agent activity.
 
 - Local-first by default
-- Budgets + allowlists (planned)
+- Budgets + allowlists enforced via policy files
 - Audit logs you can export (planned)
 
 ## Install

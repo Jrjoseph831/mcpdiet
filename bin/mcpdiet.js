@@ -125,6 +125,29 @@ function normalizeCommandList(list) {
   }).filter(Boolean);
 }
 
+function normalizePathEntry(value) {
+  const resolved = path.isAbsolute(value) ? value : path.resolve(cwd, value);
+  const normalized = path.normalize(resolved);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function splitPolicyList(list) {
+  const names = [];
+  const paths = [];
+  if (!Array.isArray(list)) return { names, paths };
+  list.forEach((entry) => {
+    if (typeof entry !== 'string') return;
+    const trimmed = entry.trim();
+    if (!trimmed) return;
+    if (/[\\/]/.test(trimmed)) {
+      paths.push(normalizePathEntry(trimmed));
+    } else {
+      names.push(normalizeCommandName(trimmed));
+    }
+  });
+  return { names, paths };
+}
+
 function loadPolicyOrDefault(policiesDir, filename, fallback) {
   const filePath = path.join(policiesDir, filename);
   if (!fs.existsSync(filePath)) return fallback;
@@ -166,6 +189,35 @@ function redactText(text, tokens) {
 function redactChunk(chunk, tokens) {
   const text = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
   return redactText(text, tokens);
+}
+
+function createRedactor(tokens) {
+  if (!tokens || tokens.length === 0) return null;
+  const maxTokenLength = tokens.reduce((max, token) => Math.max(max, token.length), 0);
+  let tail = '';
+  return {
+    redact(chunk) {
+      const text = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
+      const combined = tail + text;
+      const redacted = redactText(combined, tokens);
+      if (maxTokenLength < 2) {
+        tail = '';
+        return redacted;
+      }
+      const keep = maxTokenLength - 1;
+      if (redacted.length <= keep) {
+        tail = redacted;
+        return '';
+      }
+      tail = redacted.slice(-keep);
+      return redacted.slice(0, -keep);
+    },
+    flush() {
+      const remaining = tail;
+      tail = '';
+      return remaining;
+    }
+  };
 }
 
 function usageRun() {
@@ -374,14 +426,16 @@ if (cmd === 'run') {
       process.exit(EXIT_ERROR);
     }
 
-    const deny = normalizeCommandList(allowlist && allowlist.deny);
-    const allow = normalizeCommandList(allowlist && allowlist.allow);
+    const deny = splitPolicyList(allowlist && allowlist.deny);
+    const allow = splitPolicyList(allowlist && allowlist.allow);
     const cmdKey = normalizeCommandName(command);
-    if (deny.includes(cmdKey)) {
+    const cmdPath = /[\\/]/.test(command) ? normalizePathEntry(command) : null;
+    if (deny.names.includes(cmdKey) || (cmdPath && deny.paths.includes(cmdPath))) {
       console.error(`Policy denylist blocked command: ${command}`);
       process.exit(EXIT_USAGE);
     }
-    if (allow.length > 0 && !allow.includes(cmdKey)) {
+    if ((allow.names.length > 0 || allow.paths.length > 0)
+      && !(allow.names.includes(cmdKey) || (cmdPath && allow.paths.includes(cmdPath)))) {
       console.error(`Policy allowlist does not permit command: ${command}`);
       process.exit(EXIT_USAGE);
     }
@@ -395,6 +449,8 @@ if (cmd === 'run') {
     const maxRunLogKB = Number(budgets && budgets.maxRunLogKB);
     const maxRunLogBytes = Number.isFinite(maxRunLogKB) && maxRunLogKB > 0 ? maxRunLogKB * 1024 : Infinity;
     const redactionTokens = collectRedactionTokens(redactions);
+    const stdoutRedactor = createRedactor(redactionTokens);
+    const stderrRedactor = createRedactor(redactionTokens);
 
     const runsBase = pathsCfg.runsDir;
     ensureDir(runsBase);
@@ -438,8 +494,7 @@ if (cmd === 'run') {
     }
 
     function writeLog(stream, chunk) {
-      const redacted = redactionTokens.length ? redactChunk(chunk, redactionTokens) : chunk;
-      const data = Buffer.isBuffer(redacted) ? redacted : Buffer.from(String(redacted), 'utf8');
+      const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), 'utf8');
       if (maxRunLogBytes !== Infinity) {
         const remaining = maxRunLogBytes - logBytes;
         if (remaining <= 0) {
@@ -468,6 +523,20 @@ if (cmd === 'run') {
       } catch (e) {
         console.error('Failed to write run.json:', e && e.message ? e.message : e);
       }
+      if (stdoutRedactor) {
+        const tail = stdoutRedactor.flush();
+        if (tail) {
+          process.stdout.write(tail);
+          writeLog(outStream, tail);
+        }
+      }
+      if (stderrRedactor) {
+        const tail = stderrRedactor.flush();
+        if (tail) {
+          process.stderr.write(tail);
+          writeLog(errStream, tail);
+        }
+      }
       let pending = 2;
       const done = () => {
         pending -= 1;
@@ -490,14 +559,20 @@ if (cmd === 'run') {
 
     if (child.stdout) {
       child.stdout.on('data', (chunk) => {
-        process.stdout.write(chunk);
-        writeLog(outStream, chunk);
+        const output = stdoutRedactor ? stdoutRedactor.redact(chunk) : chunk;
+        if (output && (Buffer.isBuffer(output) ? output.length : output.length > 0)) {
+          process.stdout.write(output);
+          writeLog(outStream, output);
+        }
       });
     }
     if (child.stderr) {
       child.stderr.on('data', (chunk) => {
-        process.stderr.write(chunk);
-        writeLog(errStream, chunk);
+        const output = stderrRedactor ? stderrRedactor.redact(chunk) : chunk;
+        if (output && (Buffer.isBuffer(output) ? output.length : output.length > 0)) {
+          process.stderr.write(output);
+          writeLog(errStream, output);
+        }
       });
     }
 

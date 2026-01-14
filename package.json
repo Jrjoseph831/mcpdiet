@@ -42,7 +42,7 @@
   ],
   "scripts": {
     "test": "node --test",
-    "prepublishOnly": "npm test",
+    "prepublishOnly": "npm test && npm run pack:check",
     "pack:check": "npm pack --dry-run"
   }
 }
