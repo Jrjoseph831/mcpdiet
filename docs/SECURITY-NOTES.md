@@ -1,44 +1,22 @@
-# Security Notes: Threat Model & Guardrails
+# Security Notes: Threat Model and Guardrails
 
 ## Threat Model
 - Local attacker with access to the user's account
-- Malicious or malformed input files
+- Malicious or malformed config/input
 - Accidental misuse of CLI commands
 
-## Design Guardrails
-- All file writes are restricted to the current working directory's `.mcpdiet` folder
-- No path traversal above the working directory is allowed
-- Child process execution uses Node's `spawn`/`execFile` with `shell: false` (never shell=true)
+## Guardrails
+- All file writes are constrained to `paths.rootDir` under the project directory
+- Prevents path traversal outside `paths.rootDir`
+- Child process execution uses `spawn` with `shell: false`
 - No network calls are made by the CLI
-- Logs and run artifacts are stored only in `.mcpdiet/runs/`
-- No collection or transmission of PII
-- All config and manifest files are written as UTF-8 (no BOM)
+- Logs and run artifacts are stored in `.mcpdiet/runs/`
+- Policy files are stored in `.mcpdiet/policies/`
+- Redaction policy files are stored locally (enforcement is planned, not yet applied to logs)
+- Config and policy JSON are written as UTF-8 (no BOM)
 
 ## Platform Notes
-- Windows: Handles PowerShell/cmd, avoids shebang/encoding pitfalls
-- macOS/Linux: Standard Node.js execution, no shell-specific dependencies
+- Windows: PowerShell/cmd supported, no shell-specific dependencies
+- macOS/Linux: Standard Node.js execution
 
----
-
-## Node CLI Security Hardening Notes
-
-### Input Validation
-- All CLI arguments are validated for type, length, and allowed values.
-- Rejects unexpected or dangerous input (e.g., path traversal, shell metacharacters).
-
-### Dependency Management
-- Only maintained and trusted packages are used.
-- Regularly run `npm audit` and update dependencies.
-
-### Command Execution
-- No use of `eval`, `Function`, or dynamic code execution.
-- Any shell commands (if present) are sanitized and use child_process safely.
-
-### Error Handling
-- Errors are logged without exposing sensitive data.
-- Stack traces are suppressed in user-facing output.
-
-### Sensitive Data
-- No secrets, credentials, or PII are stored or logged.
-
-See SECURITY.md for policy and checklist.
+See SECURITY.md for policy and reporting.
