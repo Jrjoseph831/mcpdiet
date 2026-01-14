@@ -1,8 +1,9 @@
 {
   "name": "@lowloadlabs/mcpdiet-cli",
   "version": "0.2.0",
-  "description": "Local-first guardrails for MCP/agent runs (early preview).",
+  "description": "Local-first guardrails for MCP/agent runs.",
   "license": "MIT",
+  "author": "Lowload Labs",
   "private": false,
   "bin": {
     "mcpdiet": "bin/mcpdiet.js"
@@ -10,16 +11,17 @@
   "files": [
     "bin/",
     "docs/",
+    "test/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "SECURITY.md"
   ],
   "publishConfig": {
     "access": "public"
   },
   "engines": {
     "node": ">=18"
-  }
-  ,
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Jrjoseph831/mcpdiet.git"
@@ -33,15 +35,11 @@
     "agent",
     "agents",
     "mcp-cli",
-    "mcp-agent",
-    "local-first",
     "guardrails",
     "audit",
-    "tooling",
-    "gateway",
-    "lowloadlabs"
-  ]
-  ,
+    "local-first",
+    "security"
+  ],
   "scripts": {
     "test": "node --test",
     "prepublishOnly": "npm test",
