@@ -9,8 +9,8 @@ No. This is an early preview CLI. The goal is to iterate quickly.
 ## What does `mcpdiet init` do?
 Creates `.mcpdiet.json` in the current folder with sane defaults.
 
-## Where will logs go?
-Planned: `.mcpdiet/logs/` (exportable). Early versions may only print to console.
+## Where do logs go?
+Runs are recorded under `.mcpdiet/runs/<id>/` with `run.json`, `stdout.log`, and `stderr.log`.
 
 ## How do I test the CLI command locally?
 Run:

@@ -332,12 +332,25 @@ if (cmd === 'run') {
       } catch (e) {
         console.error('Failed to write run.json:', e && e.message ? e.message : e);
       }
+      let pending = 2;
+      const done = () => {
+        pending -= 1;
+        if (pending <= 0) process.exit(exitCode);
+      };
+      outStream.on('finish', done);
+      errStream.on('finish', done);
+      outStream.on('error', done);
+      errStream.on('error', done);
       outStream.end();
       errStream.end();
-      process.exit(exitCode);
     }
 
-    const child = spawn(command, commandArgs, { shell: false, windowsHide: false, cwd });
+    const child = spawn(command, commandArgs, {
+      shell: false,
+      windowsHide: false,
+      windowsVerbatimArguments: false,
+      cwd
+    });
 
     if (child.stdout) {
       child.stdout.on('data', (chunk) => {
@@ -356,6 +369,13 @@ if (cmd === 'run') {
       console.error('Failed to start child process:', err && err.message ? err.message : err);
       finalize(EXIT_ERROR, null);
     });
+
+    function handleSignal(signal) {
+      try { child.kill(signal); } catch (e) {}
+      finalize(EXIT_ERROR, signal);
+    }
+    process.once('SIGINT', () => handleSignal('SIGINT'));
+    process.once('SIGTERM', () => handleSignal('SIGTERM'));
 
     child.on('close', (code, signal) => {
       const exitCode = (typeof code === 'number') ? code : EXIT_ERROR;
@@ -393,7 +413,11 @@ if (cmd === 'status') {
     const runs = runDirs.map((d) => {
       const p = path.join(runsBase, d, 'run.json');
       try { return loadJson(p); } catch (e) { return null; }
-    }).filter(Boolean).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()).slice(0, 10);
+    }).filter(Boolean).sort((a, b) => {
+      const aTime = Date.parse(a.startedAt) || 0;
+      const bTime = Date.parse(b.startedAt) || 0;
+      return bTime - aTime;
+    }).slice(0, 10);
 
     if (!runs.length) {
       console.log('No runs found.');

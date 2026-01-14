@@ -34,7 +34,7 @@ mcpdiet status
 
 - `mcpdiet --help` / `mcpdiet --version`
 - `mcpdiet init`: initialize config and policy files; migrates existing config to `schemaVersion: 1` if missing.
-- `mcpdiet doctor`: check Node version, write access, config validity, and policy JSON files. Exit codes: 0 OK, 1 missing/invalid, 2 unexpected error.
+- `mcpdiet doctor`: check Node version, write access, config validity, and policy JSON files. Exit codes: 0 OK, 2 failure.
 - `mcpdiet run -- <command...>` (or `mcpdiet run <command...>`): runs the command, streams stdout/stderr to console and to `.mcpdiet/runs/<id>/stdout.log` and `stderr.log`, and writes run metadata to `.mcpdiet/runs/<id>/run.json` (id, timestamps, cwd, command, args, nodeVersion, platform, exitCode, signal).
 - `mcpdiet status`: list the last 10 runs from `.mcpdiet/runs/*/run.json` (newest first) with id, start time, exit code, and command.
 
