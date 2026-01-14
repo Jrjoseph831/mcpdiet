@@ -19,7 +19,7 @@ npm link
 mcpdiet --help
 ```
 
-How do I uninstall the global link?
+## How do I uninstall the global link?
 
 ```
 npm unlink -g @lowloadlabs/mcpdiet-cli

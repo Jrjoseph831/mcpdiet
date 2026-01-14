@@ -19,8 +19,6 @@ npm i -g @lowloadlabs/mcpdiet-cli
 ## Quickstart (Windows PowerShell)
 
 ```powershell
-cd C:\dev\lowload\mcpdiet
-npm link
 mcpdiet init
 mcpdiet doctor
 mcpdiet run -- node -e "console.log('hello')"
@@ -53,4 +51,3 @@ mcpdiet status
 ## License
 
 MIT
-\n(ruleset verification)
