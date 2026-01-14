@@ -555,7 +555,10 @@ if (cmd === 'status') {
     }).filter(Boolean).sort((a, b) => {
       const aTime = Date.parse(a.startedAt) || 0;
       const bTime = Date.parse(b.startedAt) || 0;
-      return bTime - aTime;
+      if (bTime !== aTime) return bTime - aTime;
+      const aId = typeof a.id === 'string' ? a.id : '';
+      const bId = typeof b.id === 'string' ? b.id : '';
+      return bId.localeCompare(aId);
     }).slice(0, 10);
 
     if (!runs.length) {
@@ -565,8 +568,12 @@ if (cmd === 'status') {
 
     runs.forEach((r) => {
       const code = (typeof r.exitCode === 'number') ? r.exitCode : (r.finishedAt ? 'unknown' : 'running');
-      const argStr = r.args && r.args.length ? ` ${r.args.join(' ')}` : '';
-      console.log(`${r.id} | ${r.startedAt} | exit:${code} | ${r.command}${argStr}`);
+      const id = (typeof r.id === 'string' && r.id) ? r.id : 'unknown';
+      const startedAt = (typeof r.startedAt === 'string' && r.startedAt) ? r.startedAt : 'unknown';
+      const command = (typeof r.command === 'string' && r.command) ? r.command : 'unknown';
+      const args = Array.isArray(r.args) ? r.args : [];
+      const argStr = args.length ? ` ${args.join(' ')}` : '';
+      console.log(`${id} | ${startedAt} | exit:${code} | ${command}${argStr}`);
     });
     process.exit(EXIT_OK);
   } catch (err) {
