@@ -31,6 +31,10 @@ const defaultPaths = {
   policiesDir: '.mcpdiet/policies'
 };
 
+const defaultAllowlist = { allow: [], deny: [] };
+const defaultBudgets = { maxCallsPerRun: 200, maxToolSchemaBytes: 250000, maxRunLogKB: 256 };
+const defaultRedactions = { env: ["OPENAI_API_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_ANON_KEY"], patterns: [] };
+
 function writeJson(filePath, data) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), { encoding: 'utf8' });
 }
@@ -102,6 +106,68 @@ function loadConfigIfExists(cfgPath) {
   return loadJson(cfgPath);
 }
 
+function normalizeCommandName(value) {
+  const base = path.basename(value || '');
+  let name = base;
+  if (process.platform === 'win32') {
+    name = name.toLowerCase();
+  }
+  return name.replace(/\.(exe|cmd|bat)$/i, '');
+}
+
+function normalizeCommandList(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map((entry) => {
+    if (typeof entry !== 'string') return null;
+    const trimmed = entry.trim();
+    if (!trimmed) return null;
+    return normalizeCommandName(trimmed);
+  }).filter(Boolean);
+}
+
+function loadPolicyOrDefault(policiesDir, filename, fallback) {
+  const filePath = path.join(policiesDir, filename);
+  if (!fs.existsSync(filePath)) return fallback;
+  try {
+    return loadJson(filePath);
+  } catch (e) {
+    throw new Error(`Invalid JSON in ${filePath}`);
+  }
+}
+
+function collectRedactionTokens(redactions) {
+  const tokens = new Set();
+  if (redactions && Array.isArray(redactions.env)) {
+    redactions.env.forEach((name) => {
+      if (typeof name !== 'string') return;
+      const value = process.env[name];
+      if (value) tokens.add(value);
+    });
+  }
+  if (redactions && Array.isArray(redactions.patterns)) {
+    redactions.patterns.forEach((pattern) => {
+      if (typeof pattern !== 'string') return;
+      const trimmed = pattern.trim();
+      if (trimmed) tokens.add(trimmed);
+    });
+  }
+  return Array.from(tokens);
+}
+
+function redactText(text, tokens) {
+  let output = text;
+  tokens.forEach((token) => {
+    if (!token) return;
+    output = output.split(token).join('[REDACTED]');
+  });
+  return output;
+}
+
+function redactChunk(chunk, tokens) {
+  const text = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
+  return redactText(text, tokens);
+}
+
 function usageRun() {
   console.error('Usage: mcpdiet run -- <command> [args]');
 }
@@ -164,9 +230,9 @@ if (cmd === 'init') {
     ensureDir(pathsCfg.runsDir);
     ensureDir(pathsCfg.policiesDir);
 
-    writeJsonIfMissing(path.join(pathsCfg.policiesDir, 'allowlist.json'), { allow: [], deny: [] });
-    writeJsonIfMissing(path.join(pathsCfg.policiesDir, 'budgets.json'), { maxCallsPerRun: 200, maxToolSchemaBytes: 250000, maxRunLogKB: 256 });
-    writeJsonIfMissing(path.join(pathsCfg.policiesDir, 'redactions.json'), { env: ["OPENAI_API_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_ANON_KEY"], patterns: [] });
+    writeJsonIfMissing(path.join(pathsCfg.policiesDir, 'allowlist.json'), defaultAllowlist);
+    writeJsonIfMissing(path.join(pathsCfg.policiesDir, 'budgets.json'), defaultBudgets);
+    writeJsonIfMissing(path.join(pathsCfg.policiesDir, 'redactions.json'), defaultRedactions);
 
     if (!existed) {
       writeJson(cfgPath, cfg);
@@ -295,6 +361,41 @@ if (cmd === 'run') {
       process.exit(EXIT_ERROR);
     }
 
+    let allowlist;
+    let budgets;
+    let redactions;
+    try {
+      const policiesDir = pathsCfg.policiesDir;
+      allowlist = loadPolicyOrDefault(policiesDir, 'allowlist.json', defaultAllowlist);
+      budgets = loadPolicyOrDefault(policiesDir, 'budgets.json', defaultBudgets);
+      redactions = loadPolicyOrDefault(policiesDir, 'redactions.json', defaultRedactions);
+    } catch (e) {
+      console.error('Policy error:', e && e.message ? e.message : e);
+      process.exit(EXIT_ERROR);
+    }
+
+    const deny = normalizeCommandList(allowlist && allowlist.deny);
+    const allow = normalizeCommandList(allowlist && allowlist.allow);
+    const cmdKey = normalizeCommandName(command);
+    if (deny.includes(cmdKey)) {
+      console.error(`Policy denylist blocked command: ${command}`);
+      process.exit(EXIT_USAGE);
+    }
+    if (allow.length > 0 && !allow.includes(cmdKey)) {
+      console.error(`Policy allowlist does not permit command: ${command}`);
+      process.exit(EXIT_USAGE);
+    }
+
+    const maxCallsPerRun = Number(budgets && budgets.maxCallsPerRun);
+    if (Number.isFinite(maxCallsPerRun) && maxCallsPerRun < 1) {
+      console.error('Policy budget maxCallsPerRun blocks execution.');
+      process.exit(EXIT_USAGE);
+    }
+
+    const maxRunLogKB = Number(budgets && budgets.maxRunLogKB);
+    const maxRunLogBytes = Number.isFinite(maxRunLogKB) && maxRunLogKB > 0 ? maxRunLogKB * 1024 : Infinity;
+    const redactionTokens = collectRedactionTokens(redactions);
+
     const runsBase = pathsCfg.runsDir;
     ensureDir(runsBase);
 
@@ -303,12 +404,16 @@ if (cmd === 'run') {
     ensureDir(runDir);
 
     const startedAt = new Date().toISOString();
+    const redactValue = (value) => {
+      if (!redactionTokens.length) return value;
+      return redactText(String(value), redactionTokens);
+    };
     const runMeta = {
       id,
       startedAt,
       cwd,
-      command,
-      args: commandArgs,
+      command: redactValue(command),
+      args: commandArgs.map((arg) => redactValue(arg)),
       nodeVersion: process.versions.node,
       platform: process.platform
     };
@@ -321,12 +426,43 @@ if (cmd === 'run') {
     const outStream = fs.createWriteStream(stdoutPath, { flags: 'a' });
     const errStream = fs.createWriteStream(stderrPath, { flags: 'a' });
 
+    let child;
+    let logBytes = 0;
+    let budgetExceeded = false;
+
+    function markBudgetExceeded() {
+      if (budgetExceeded) return;
+      budgetExceeded = true;
+      console.error('Log budget exceeded, terminating command.');
+      try { if (child) child.kill('SIGTERM'); } catch (e) {}
+    }
+
+    function writeLog(stream, chunk) {
+      const redacted = redactionTokens.length ? redactChunk(chunk, redactionTokens) : chunk;
+      const data = Buffer.isBuffer(redacted) ? redacted : Buffer.from(String(redacted), 'utf8');
+      if (maxRunLogBytes !== Infinity) {
+        const remaining = maxRunLogBytes - logBytes;
+        if (remaining <= 0) {
+          markBudgetExceeded();
+          return;
+        }
+        if (data.length > remaining) {
+          stream.write(data.slice(0, remaining));
+          logBytes += remaining;
+          markBudgetExceeded();
+          return;
+        }
+      }
+      stream.write(data);
+      logBytes += data.length;
+    }
+
     let finalized = false;
     function finalize(exitCode, signal) {
       if (finalized) return;
       finalized = true;
       const finishedAt = new Date().toISOString();
-      const updated = Object.assign({}, runMeta, { finishedAt, exitCode, signal });
+      const updated = Object.assign({}, runMeta, { finishedAt, exitCode, signal, logBytes, budgetExceeded });
       try {
         writeJson(runJsonPath, updated);
       } catch (e) {
@@ -345,7 +481,7 @@ if (cmd === 'run') {
       errStream.end();
     }
 
-    const child = spawn(command, commandArgs, {
+    child = spawn(command, commandArgs, {
       shell: false,
       windowsHide: false,
       windowsVerbatimArguments: false,
@@ -355,13 +491,13 @@ if (cmd === 'run') {
     if (child.stdout) {
       child.stdout.on('data', (chunk) => {
         process.stdout.write(chunk);
-        outStream.write(chunk);
+        writeLog(outStream, chunk);
       });
     }
     if (child.stderr) {
       child.stderr.on('data', (chunk) => {
         process.stderr.write(chunk);
-        errStream.write(chunk);
+        writeLog(errStream, chunk);
       });
     }
 
@@ -378,7 +514,10 @@ if (cmd === 'run') {
     process.once('SIGTERM', () => handleSignal('SIGTERM'));
 
     child.on('close', (code, signal) => {
-      const exitCode = (typeof code === 'number') ? code : EXIT_ERROR;
+      let exitCode = (typeof code === 'number') ? code : EXIT_ERROR;
+      if (budgetExceeded && exitCode === 0) {
+        exitCode = EXIT_ERROR;
+      }
       finalize(exitCode, signal);
     });
     return;

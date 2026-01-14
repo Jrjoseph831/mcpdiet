@@ -12,7 +12,7 @@
 - No network calls are made by the CLI
 - Logs and run artifacts are stored in `.mcpdiet/runs/`
 - Policy files are stored in `.mcpdiet/policies/`
-- Redaction policy files are stored locally (enforcement is planned, not yet applied to logs)
+- Redaction policy is applied to run logs and run metadata
 - Config and policy JSON are written as UTF-8 (no BOM)
 
 ## Platform Notes
