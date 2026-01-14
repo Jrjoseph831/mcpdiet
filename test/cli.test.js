@@ -60,3 +60,11 @@ test('run creates run record and logs, status lists it', () => {
   assert.strictEqual(s.status, 0);
   assert.match(s.stdout + s.stderr, /exit:/);
 });
+
+test('run propagates child exit code', () => {
+  const tmp = mkdtemp();
+  spawnSync(node, [bin, 'init'], { cwd: tmp, encoding: 'utf8' });
+
+  const r = spawnSync(node, [bin, 'run', '--', node, '-e', 'process.exit(7)'], { cwd: tmp, encoding: 'utf8' });
+  assert.strictEqual(r.status, 7);
+});
